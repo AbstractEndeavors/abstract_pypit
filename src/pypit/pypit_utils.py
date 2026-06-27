@@ -262,6 +262,7 @@ def upload_package(package_name=None, path=None):
                 "python3", "-m", "twine", "upload",
                 "--repository", "pypi",
                 "--non-interactive",
+                "--skip-existing",
                 "dist/*",
             ],
             check=True,
