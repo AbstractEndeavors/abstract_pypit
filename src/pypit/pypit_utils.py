@@ -216,9 +216,30 @@ def get_pypi_release_set(package_name):
     return set()
 
 
+def _fetch_pypi_state(package_name):
+    """(latest_version, releases_set) from PyPI. FAIL LOUD on a transient failure
+    (network error / non-404 status) so we never re-publish an existing release by
+    guessing. A 404 means the package is new -> ("0.0.0", empty set)."""
+    url = f"https://pypi.org/pypi/{package_name}/json"
+    try:
+        r = requests.get(url, timeout=15)
+    except requests.RequestException as e:
+        raise RuntimeError(
+            f"PyPI unreachable for {package_name} ({e}); refusing to guess a version "
+            f"(would risk re-publishing an existing release)."
+        ) from e
+    if r.status_code == 404:
+        return "0.0.0", set()
+    if r.status_code != 200:
+        raise RuntimeError(
+            f"PyPI returned HTTP {r.status_code} for {package_name}; refusing to guess a version."
+        )
+    data = r.json()
+    return data["info"]["version"], set(data.get("releases", {}).keys())
+
+
 def get_next_free_version(package_name, local_version=None):
-    pypi = get_current_version(package_name) or "0.0.0"
-    releases = get_pypi_release_set(package_name)
+    pypi, releases = _fetch_pypi_state(package_name)
     if local_version and _version_tuple(local_version) > _version_tuple(pypi):
         if local_version not in releases:
             return local_version
