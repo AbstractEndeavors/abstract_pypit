@@ -65,11 +65,23 @@ def ensure_gitignore(root="."):
 
 
 def get_package_name(path=None):
+    # Prefer pyproject [project].name (PEP 621) — no setuptools/setup.py execution needed.
+    try:
+        toml = os.path.join(path or os.getcwd(), "pyproject.toml")
+        if os.path.exists(toml):
+            txt = open(toml, encoding="utf-8").read()
+            blk = re.search(r'(?ms)^\[project\]\s*(.*?)(?=^\[|\Z)', txt)
+            if blk:
+                nm = re.search(r'(?m)^\s*name\s*=\s*["\']([^"\']+)["\']', blk.group(1))
+                if nm:
+                    return nm.group(1).strip()
+    except Exception as e:
+        print(f"ℹ️ pyproject name read failed ({e}); falling back to setup.py")
     try:
         output, stderr = getCmdRunLocal(key="package_name", path=path)
         return output.strip()
     except subprocess.CalledProcessError:
-        print("Error: Unable to determine package name from setup.py")
+        print("Error: Unable to determine package name")
 
 
 def get_current_version(package_name):

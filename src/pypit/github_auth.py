@@ -44,7 +44,12 @@ def ensure_ssh_key(key_path=None):
 def ensure_ssh_config_for_github(key_path=None):
     key_path = os.path.expanduser(key_path or get_git_key_path())
     cfg_path = os.path.expanduser(get_ssh_config_path())
-    os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+    ssh_dir = os.path.dirname(cfg_path)
+    os.makedirs(ssh_dir, exist_ok=True)
+    try:
+        os.chmod(ssh_dir, 0o700)
+    except OSError:
+        pass
     block = (
         "Host github.com\n"
         "  User git\n"
@@ -60,6 +65,8 @@ def ensure_ssh_config_for_github(key_path=None):
             with open(cfg_path, "a", encoding="utf-8") as f:
                 f.write("\n" + block)
             print("🛠️ wrote github.com SSH stanza to ~/.ssh/config")
+        if os.path.exists(cfg_path):
+            os.chmod(cfg_path, 0o600)   # ssh rejects group/other-writable config
     except Exception as e:
         print(f"⚠️ couldn't edit ~/.ssh/config: {e}")
 
