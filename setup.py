@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="abstract_pypit",
-    version='0.0.1',
+    version='0.0.2',
     description="One-command PyPI publisher + GitHub pusher.",
     author="putkoff",
     author_email="partners@abstractendeavors.com",

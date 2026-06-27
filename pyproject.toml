@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abstract_pypit"
-version = "0.0.1"
+version = "0.0.2"
 description = "One-command PyPI publisher + GitHub pusher. Version-bumps, builds, uploads to PyPI, commits and pushes to GitHub, and syncs the local install — all in one call."
 readme = "README.md"
 license = { text = "MIT" }
