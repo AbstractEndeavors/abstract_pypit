@@ -54,7 +54,7 @@ def update_package_until_synced(package_name, new_version=None):
 
 def runPypit():
     ensure_gitignore()
-    git_env = ensure_git_ssh()
+    git_env = os.environ.copy()
     package_name = get_package_name()
     print(f"Package name: {package_name}")
 
@@ -62,6 +62,7 @@ def runPypit():
 
     if pypit_cfg["github_push"]:
         try:
+            git_env = ensure_git_ssh()
             git_env = git_debug_repo_and_remote(
                 package_name, owner=pypit_cfg["github_owner"], env=git_env)
         except Exception as e:
@@ -107,9 +108,22 @@ def runPypit():
             os.path.join(directory, "build"),
             os.path.join(directory, "dist"),
         ]
+        def _force_rmtree(path):
+            # Portable robust remove: (1) pre-mark everything writable so Windows
+            # read-only files don't block rmtree; (2) ignore_errors so a file we
+            # genuinely can't delete (e.g. a stale egg-info owned by another uid on
+            # a shared mount) is skipped rather than aborting the whole publish.
+            import stat
+            for base, dirs, files in os.walk(path):
+                for name in dirs + files:
+                    try:
+                        os.chmod(os.path.join(base, name), stat.S_IWRITE | stat.S_IREAD)
+                    except OSError:
+                        pass
+            shutil.rmtree(path, ignore_errors=True)
         for d in remove_dirs:
             if os.path.isdir(d):
-                shutil.rmtree(d)
+                _force_rmtree(d)
         for f in remove_files:
             if os.path.exists(f):
                 os.remove(f)

@@ -17,6 +17,11 @@ from .imports import *  # noqa: F401,F403
 # ------------------------------------------------------------------------------
 
 def run_github(cmd, cwd=None, check=True, env=None):
+    # Neutralize git's "dubious ownership" refusal (repo dir owned by another uid —
+    # common on shared mounts) for THIS invocation only, without touching the
+    # user's global git config. Portable; a no-op for non-git commands.
+    if cmd and cmd[0] == "git":
+        cmd = ["git", "-c", "safe.directory=*", *cmd[1:]]
     p = subprocess.run(cmd, cwd=cwd, env=env, text=True, capture_output=True)
     if check and p.returncode != 0:
         raise subprocess.CalledProcessError(p.returncode, cmd, p.stdout, p.stderr)
@@ -153,21 +158,6 @@ def ensure_remote_repo(package_name: str, owner: str = None,
         return f"git@github.com:{owner}/{package_name}.git"
 
 
-# ------------------------------------------------------------------------------
-# Forgejo (canonical source-of-truth git host). GitHub is a downstream push-mirror
-# configured INSIDE Forgejo, so pypit pushes releases to Forgejo and lets the mirror
-# propagate to GitHub. Host/port/org are env-overridable.
-# ------------------------------------------------------------------------------
-import os as _fj_os
-FORGEJO_HOST = _fj_os.environ.get("PYPIT_FORGEJO_HOST", "git.abstractendeavors.com")
-FORGEJO_PORT = _fj_os.environ.get("PYPIT_FORGEJO_PORT", "2222")
-FORGEJO_ORG  = _fj_os.environ.get("PYPIT_FORGEJO_ORG", "AbstractEndeavors")
-
-def is_forgejo_url(url: str) -> bool:
-    return bool(url) and FORGEJO_HOST in url
-
-def forgejo_ssh_url(package_name: str, owner: str = None) -> str:
-    return f"ssh://git@{FORGEJO_HOST}:{FORGEJO_PORT}/{owner or FORGEJO_ORG}/{package_name}.git"
     owner = get_owner_name(prefer_org_owner)
     try:
         if not repo_exists(prefer_org_owner, package_name):
@@ -227,10 +217,6 @@ def _ensure_origin(package_name: str, owner: str = None, env=None) -> str:
     has_origin = any(line.startswith("origin\t") for line in remotes_out.splitlines())
     if has_origin:
         url_out, _ = _git(["remote", "get-url", "origin"], check=False, env=env)
-        # Forgejo is canonical: never clobber a Forgejo origin back to GitHub.
-        if is_forgejo_url(url_out):
-            print(f"\u2705 Forgejo origin (canonical) kept as-is: {url_out}")
-            return url_out
         if owner and f":{owner}/" not in url_out:
             new_url = default_ssh_url(package_name, owner=owner)
             _git(["remote", "set-url", "origin", new_url], env=env)
