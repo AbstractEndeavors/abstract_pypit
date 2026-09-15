@@ -79,7 +79,8 @@ def ensure_ssh_config_for_github(key_path=None):
 def git_env_with_key(key_path=None):
     key_path = os.path.expanduser(key_path or get_git_key_path())
     env = os.environ.copy()
-    env["GIT_SSH_COMMAND"] = f"ssh -i {key_path} -o IdentitiesOnly=yes"
+    configured_ssh, _ = _git(["config", "--get", "core.sshCommand"], check=False)
+    env["GIT_SSH_COMMAND"] = configured_ssh or f"ssh -i {key_path} -o IdentitiesOnly=yes"
     return env
 
 
