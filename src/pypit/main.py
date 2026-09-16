@@ -128,6 +128,14 @@ def runPypit():
             if os.path.exists(f):
                 os.remove(f)
 
+        # Early heads-up: a stale artifact we couldn't delete (owned by another
+        # uid on a shared mount) will make the build fail with a confusing error.
+        stuck = [d for d in remove_dirs if os.path.isdir(d) and not os.access(d, os.W_OK)]
+        if stuck:
+            print(f"⚠️ Could not clear (owned by another user?): {', '.join(stuck)}")
+            print(f"   The build may fail — run pypit as that user, or: "
+                  f"sudo chown -R $(id -un):$(id -gn) {directory}")
+
         print("🔧 Building package...")
         output, stderr = build_package()
         if output is None and stderr is None:

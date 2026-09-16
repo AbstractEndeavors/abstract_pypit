@@ -273,19 +273,48 @@ def update_version_in_files(current_pypi_version, new_version):
 def build_package(package_name=None, path=None):
     try:
         output, stderr = getCmdRunLocal(key="build_package", package_name=package_name, path=path)
-        print(f"Package built successfully: {output}")
-        for file in os.listdir("dist"):
-            if file.endswith((".whl", ".tar.gz")):
-                result = subprocess.run(
-                    ["gpg", "--detach-sign", "--armor", f"dist/{file}"],
-                    capture_output=True, text=True,
-                )
-                if result.returncode != 0:
-                    print(f"⚠️ GPG signing skipped for {file}: {result.stderr.strip()}")
-        return output, stderr
     except Exception as e:
-        print(f"Error during building the package: {e}")
-    return None, None
+        print(f"Error invoking the build command: {e}")
+        return None, None
+
+    # Success is measured by ARTIFACTS, not by the command returning — `python -m
+    # build` can fail (permission denied on build/dist/*.egg-info owned by another
+    # uid) and run_local_cmd swallows the non-zero exit. Checking dist/ directly
+    # avoids the misleading "No such file or directory: 'dist'" that hid the real
+    # cause, and lets us surface it.
+    dist_dir = os.path.join(os.path.abspath(path) if path else os.getcwd(), "dist")
+    try:
+        artifacts = [f for f in os.listdir(dist_dir) if f.endswith((".whl", ".tar.gz"))]
+    except FileNotFoundError:
+        artifacts = []
+
+    if not artifacts:
+        print("❌ Build produced no artifacts in dist/.")
+        real = (stderr or "").strip() or (output or "").strip()
+        if real:
+            print("── build output (tail) ──────────────────────────────────────")
+            print(real[-2000:])
+            print("─────────────────────────────────────────────────────────────")
+        low = (stderr or "").lower() + (output or "").lower()
+        if any(s in low for s in ("permission denied", "operation not permitted",
+                                  "cannot update time stamp", "read-only file system",
+                                  "[errno 13]", "[errno 1]")):
+            target = os.path.abspath(path) if path else os.getcwd()
+            print("↪ This looks like a PERMISSION/OWNERSHIP issue: build/, dist/, or a "
+                  "*.egg-info dir is owned by a different user, so the build backend "
+                  "cannot write to it. Run pypit as that user, or take ownership:")
+            print(f"    sudo chown -R $(id -un):$(id -gn) {target}")
+        return None, None
+
+    print(f"✅ Package built: {len(artifacts)} artifact(s) in dist/")
+    for file in artifacts:
+        result = subprocess.run(
+            ["gpg", "--detach-sign", "--armor", os.path.join(dist_dir, file)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"⚠️ GPG signing skipped for {file}: {result.stderr.strip()}")
+    return output, stderr
 
 
 def upload_package(package_name=None, path=None):
